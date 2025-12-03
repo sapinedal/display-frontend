@@ -20,7 +20,10 @@ export interface MediaDisplay {
 }
 
 class MediaDisplayService {
-  static async crearMediaDisplay(data: MediaDisplayPayload): Promise<MediaDisplay> {
+  static async crearMediaDisplay(
+    data: MediaDisplayPayload, 
+    onProgress?: (progress: number) => void
+  ): Promise<MediaDisplay> {
     if (!data) throw new Error("Payload vacío");
     if (!data.titulo) throw new Error("El título es requerido");
     if (!data.archivo) throw new Error("El archivo es requerido");
@@ -35,6 +38,13 @@ class MediaDisplayService {
       const response = await api.post("/media-display/crear", formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+        },
+        timeout: 600000, // 10 minutos
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total && onProgress) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            onProgress(percentCompleted);
+          }
         },
       });
       return response.data;
@@ -66,7 +76,8 @@ class MediaDisplayService {
 
   static async actualizarMediaDisplay(
     id: number,
-    data: Partial<MediaDisplayPayload>
+    data: Partial<MediaDisplayPayload>,
+    onProgress?: (progress: number) => void
   ): Promise<MediaDisplay> {
     try {
       const formData = new FormData();
@@ -79,6 +90,13 @@ class MediaDisplayService {
       const response = await api.post(`/media-display/actualizar/${id}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+        },
+        timeout: 600000, // 10 minutos
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total && onProgress) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            onProgress(percentCompleted);
+          }
         },
       });
       return response.data;

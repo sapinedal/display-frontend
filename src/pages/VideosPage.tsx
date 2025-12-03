@@ -36,6 +36,8 @@ export default function VideosPage() {
   const [modalMode, setModalMode] = useState<'crear' | 'editar'>('crear');
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -87,6 +89,8 @@ export default function VideosPage() {
     setSelectedMedia(null);
     resetForm();
     setPreviewUrl('');
+    setUploading(false);
+    setUploadProgress(0);
   };
 
   const resetForm = () => {
@@ -118,27 +122,44 @@ export default function VideosPage() {
         alert('El título es requerido');
         return;
       }
+      setUploading(true);
+      setUploadProgress(0);
 
       if (modalMode === 'crear') {
         if (!formData.archivo) {
           alert('Debe seleccionar un archivo');
+          setUploading(false);
           return;
         }
-        await MediaDisplayService.crearMediaDisplay({
-          titulo: formData.titulo,
-          archivo: formData.archivo,
-          orden: formData.orden,
-          activo: formData.activo,
-        });
+        await MediaDisplayService.crearMediaDisplay(
+          {
+            titulo: formData.titulo,
+            archivo: formData.archivo,
+            orden: formData.orden,
+            activo: formData.activo,
+          },
+          (progress) => {
+            setUploadProgress(progress);
+          }
+        );
         alert('Media creado exitosamente');
       } else {
-        if (!selectedMedia) return;
-        await MediaDisplayService.actualizarMediaDisplay(selectedMedia.id, {
-          titulo: formData.titulo,
-          archivo: formData.archivo || undefined,
-          orden: formData.orden,
-          activo: formData.activo,
-        });
+        if (!selectedMedia) {
+          setUploading(false);
+          return;
+        }
+        await MediaDisplayService.actualizarMediaDisplay(
+          selectedMedia.id,
+          {
+            titulo: formData.titulo,
+            archivo: formData.archivo || undefined,
+            orden: formData.orden,
+            activo: formData.activo,
+          },
+          (progress) => {
+            setUploadProgress(progress);
+          }
+        );
         alert('Media actualizado exitosamente');
       }
       
@@ -147,6 +168,9 @@ export default function VideosPage() {
     } catch (error: unknown) {
       console.error('Error al guardar media:', error);
       alert(getErrorMessage(error));
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -407,16 +431,45 @@ export default function VideosPage() {
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">
-            <Button variant="secondary" onClick={handleCloseModal}>
+            <Button 
+              variant="secondary" 
+              onClick={handleCloseModal}
+              disabled={uploading}
+            >
               Cancelar
             </Button>
             <Button
               icon={modalMode === 'crear' ? Plus : Upload}
               onClick={handleSubmit}
+              disabled={uploading}
             >
-              {modalMode === 'crear' ? 'Crear' : 'Actualizar'}
+              {uploading ? 'Subiendo...' : (modalMode === 'crear' ? 'Crear' : 'Actualizar')}
             </Button>
           </div>
+
+          {/* Indicador de progreso */}
+          {uploading && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-700 font-medium">Subiendo archivo...</span>
+                <span className="text-blue-600 font-semibold">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out flex items-center justify-end pr-2"
+                  style={{ width: `${uploadProgress}%` }}
+                >
+                  {uploadProgress > 10 && (
+                    <span className="text-xs text-white font-bold">{uploadProgress}%</span>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 flex items-center space-x-1">
+                <Spinner size="sm" />
+                <span>Por favor espera, esto puede tardar varios minutos para archivos grandes...</span>
+              </p>
+            </div>
+          )}
         </div>
       </Modal>
     </div>
