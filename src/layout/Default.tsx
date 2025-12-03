@@ -1,13 +1,7 @@
-import React, { useState } from 'react'
+import React from 'react'
 import Header from '../components/Header'
-import Sidebar from '../components/Sidebar'
 
 export default function DefaultLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
-
-  const toggleSidebar = () => {
-    setIsSidebarExpanded(!isSidebarExpanded)
-  }
 
   return (
     <div className="flex h-screen bg-gray-50">
