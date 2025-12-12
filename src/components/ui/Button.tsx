@@ -1,5 +1,6 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface ButtonProps {
   disabled?: boolean;
   className?: string;
   type?: 'button' | 'submit' | 'reset';
+  useCan?: string;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -23,7 +25,13 @@ const Button: React.FC<ButtonProps> = ({
   disabled = false,
   className = '',
   type = 'button',
+  useCan,
 }) => {
+  const { useCan: canAccess } = useAuth();
+  
+  if (useCan && !canAccess(useCan)) {
+    return null;
+  }
   const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
   
   const variantClasses = {

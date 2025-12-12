@@ -30,6 +30,7 @@ export default function Header() {
           </Button>
           <Button
             variant="outline"
+            useCan={"display.agregar-video"}
             className="border-2 border-white text-white hover:bg-blue-800 hover:border-white bg-transparent"
             onClick={() => navigate('/videos')}
           >

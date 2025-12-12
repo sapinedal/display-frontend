@@ -9,6 +9,7 @@ interface InputProps {
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   icon?: LucideIcon;
   iconPosition?: 'left' | 'right';
+  onIconClick?: () => void; // Nueva prop para manejar click en el icono
   disabled?: boolean;
   className?: string;
   name?: string;
@@ -29,6 +30,7 @@ const Input: React.FC<InputProps> = ({
   onBlur,
   icon: Icon,
   iconPosition = 'left',
+  onIconClick,
   disabled = false,
   className = '',
   name,
@@ -49,7 +51,12 @@ const Input: React.FC<InputProps> = ({
   return (
     <div className="relative">
       {Icon && iconPosition === 'left' && (
-        <Icon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+        <Icon 
+          className={`w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2 ${
+            onIconClick ? 'cursor-pointer hover:text-gray-600 transition-colors' : ''
+          }`}
+          onClick={onIconClick}
+        />
       )}
       <input
         type={type}
@@ -69,7 +76,12 @@ const Input: React.FC<InputProps> = ({
         accept={accept}
       />
       {Icon && iconPosition === 'right' && (
-        <Icon className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2" />
+        <Icon 
+          className={`w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2 ${
+            onIconClick ? 'cursor-pointer hover:text-gray-600 transition-colors' : ''
+          }`}
+          onClick={onIconClick}
+        />
       )}
     </div>
   );

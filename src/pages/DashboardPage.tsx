@@ -7,7 +7,7 @@ import Button from "../components/ui/Button";
 import DataTable, { type Column } from "../components/ui/DataTable";
 import PacienteService from "../lib/services/PacienteService";
 import type { PacientePayload } from "../lib/services/PacienteService";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 interface Paciente {
   id: number;
@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [loadingPacientes, setLoadingPacientes] = useState(false);
   const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
   const [updatingEstadoId, setUpdatingEstadoId] = useState<number | null>(null);
+  const [searchingAfiliado, setSearchingAfiliado] = useState(false);
 
   const estadosOptions = [
     { value: "preparacion", label: "Preparación" },
@@ -67,6 +68,43 @@ export default function DashboardPage() {
     // Limpiar mensajes al cambiar campos
     setError(null);
     setSuccess(null);
+  };
+
+  const buscarAfiliado = async (documento: string) => {
+    if (!documento.trim()) return;
+
+    setSearchingAfiliado(true);
+    setError(null);
+
+    try {
+      const afiliados = await PacienteService.buscarAfiliado(documento);
+      
+      if (afiliados && afiliados.length > 0) {
+        const afiliado = afiliados[0]; // Tomar el primer resultado
+        setFormData(prev => ({
+          ...prev,
+          nombrePaciente: afiliado.nombre_completo || 
+            `${afiliado.primer_nombre || ''} ${afiliado.segundo_nombre || ''} ${afiliado.primer_apellido || ''} ${afiliado.segundo_apellido || ''}`.trim()
+        }));
+      } else {
+        setError('No se encontró información del paciente con este documento');
+      }
+    } catch (err: any) {
+      console.error('Error al buscar afiliado:', err);
+      setError('Error al buscar la información del paciente');
+    } finally {
+      setSearchingAfiliado(false);
+    }
+  };
+
+  const handleDocumentoKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      e.preventDefault();
+      const documento = (e.target as HTMLInputElement).value;
+      if (documento.trim()) {
+        buscarAfiliado(documento);
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -248,11 +286,29 @@ export default function DashboardPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Número de Documento <span className="text-red-500">*</span>
+              {searchingAfiliado && (
+                <span className="text-blue-600 text-xs ml-2">
+                  <svg className="animate-spin inline h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Buscando...
+                </span>
+              )}
             </label>
             <Input
               placeholder="Ingrese Número de Documento"
               value={formData.numeroDocumento}
               onChange={(e) => handleInputChange("numeroDocumento", e.target.value)}
+              onKeyDown={handleDocumentoKeyDown}
+              icon={Search}
+              iconPosition="right"
+              onIconClick={() => {
+                if (formData.numeroDocumento.trim()) {
+                  buscarAfiliado(formData.numeroDocumento);
+                }
+              }}
+              disabled={searchingAfiliado}
               required
             />
           </div>
