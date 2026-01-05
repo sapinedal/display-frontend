@@ -31,9 +31,7 @@ function AppContent() {
         <Route
           path="/display"
           element={
-            <ProtectedRoute>
-              <DisplayPage />
-            </ProtectedRoute>
+            <DisplayPage />
           }
         />
         <Route
