@@ -17,8 +17,17 @@ export default defineConfig({
         description: 'Sistema de visualización para Clínica Victoriana',
         theme_color: '#ffffff',
         background_color: '#ffffff',
-        display: 'standalone',
+        display: 'fullscreen', // Fullscreen para ocultar barra del navegador en TV
+        orientation: 'landscape', // Forzar orientación horizontal para TV
+        start_url: '/',
+        scope: '/',
         icons: [
+          {
+            src: '/logo_clinica_victoriana.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
           {
             src: '/logo_clinica_victoriana.png',
             sizes: '512x512',
