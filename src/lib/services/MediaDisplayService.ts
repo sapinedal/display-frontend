@@ -4,6 +4,7 @@ export interface MediaDisplayPayload {
   titulo: string;
   tipo?: 'video' | 'imagen';
   archivo?: File;
+  url?: string;
   orden: number;
   activo: boolean;
 }
@@ -12,7 +13,8 @@ export interface MediaDisplay {
   id: number;
   titulo: string;
   tipo: 'video' | 'imagen';
-  archivo: string;
+  archivo: string | null;
+  url: string | null;
   orden: number;
   activo: boolean;
   created_at: string;
@@ -21,17 +23,18 @@ export interface MediaDisplay {
 
 class MediaDisplayService {
   static async crearMediaDisplay(
-    data: MediaDisplayPayload, 
+    data: MediaDisplayPayload,
     onProgress?: (progress: number) => void
   ): Promise<MediaDisplay> {
     if (!data) throw new Error("Payload vacío");
     if (!data.titulo) throw new Error("El título es requerido");
-    if (!data.archivo) throw new Error("El archivo es requerido");
+    if (!data.archivo && !data.url) throw new Error("El archivo o la URL son requeridos");
 
     try {
       const formData = new FormData();
       formData.append('titulo', data.titulo);
-      formData.append('archivo', data.archivo);
+      if (data.archivo) formData.append('archivo', data.archivo);
+      if (data.url) formData.append('url', data.url);
       formData.append('orden', data.orden.toString());
       formData.append('activo', data.activo ? '1' : '0');
 
@@ -81,9 +84,10 @@ class MediaDisplayService {
   ): Promise<MediaDisplay> {
     try {
       const formData = new FormData();
-      
+
       if (data.titulo) formData.append('titulo', data.titulo);
       if (data.archivo) formData.append('archivo', data.archivo);
+      if (data.url !== undefined) formData.append('url', data.url || '');
       if (data.orden !== undefined) formData.append('orden', data.orden.toString());
       if (data.activo !== undefined) formData.append('activo', data.activo ? '1' : '0');
 

@@ -13,8 +13,9 @@ interface Media {
   id: number;
   titulo: string;
   tipo: 'video' | 'imagen';
-  url: string;
-  archivo: string;
+  url: string | null;
+  archivo: string | null;
+  displayUrl?: string;
   activo: boolean;
   orden: number;
   created_at: string;
@@ -39,10 +40,12 @@ export default function VideosPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  const [sourceType, setSourceType] = useState<'archivo' | 'url'>('archivo');
   // Form state
   const [formData, setFormData] = useState({
     titulo: '',
     archivo: null as File | null,
+    url: '',
     activo: true,
     orden: 1,
   });
@@ -56,7 +59,9 @@ export default function VideosPage() {
       const data = await MediaDisplayService.obtenerMediaDisplays();
       const mediasFormateadas = data.map(media => ({
         ...media,
-        url: `${config.API_URL}/storage/${media.archivo}`,
+        displayUrl: media.archivo
+          ? `${config.API_URL}/storage/${media.archivo}`
+          : (media.url || ''),
       }));
       setMedias(mediasFormateadas);
     } catch (error) {
@@ -71,13 +76,15 @@ export default function VideosPage() {
     setModalMode(mode);
     if (mode === 'editar' && media) {
       setSelectedMedia(media);
+      setSourceType(media.archivo ? 'archivo' : 'url');
       setFormData({
         titulo: media.titulo,
         archivo: null,
+        url: media.url || '',
         activo: media.activo,
         orden: media.orden,
       });
-      setPreviewUrl(media.url);
+      setPreviewUrl(media.displayUrl || '');
     } else {
       resetForm();
     }
@@ -97,16 +104,18 @@ export default function VideosPage() {
     setFormData({
       titulo: '',
       archivo: null,
+      url: '',
       activo: true,
       orden: 1,
     });
+    setSourceType('archivo');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFormData({ ...formData, archivo: file });
-      
+
       // Generar preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -126,15 +135,22 @@ export default function VideosPage() {
       setUploadProgress(0);
 
       if (modalMode === 'crear') {
-        if (!formData.archivo) {
+        if (sourceType === 'archivo' && !formData.archivo) {
           alert('Debe seleccionar un archivo');
           setUploading(false);
           return;
         }
+        if (sourceType === 'url' && !formData.url) {
+          alert('Debe ingresar una URL');
+          setUploading(false);
+          return;
+        }
+
         await MediaDisplayService.crearMediaDisplay(
           {
             titulo: formData.titulo,
-            archivo: formData.archivo,
+            archivo: sourceType === 'archivo' ? (formData.archivo || undefined) : undefined,
+            url: sourceType === 'url' ? formData.url : undefined,
             orden: formData.orden,
             activo: formData.activo,
           },
@@ -152,7 +168,8 @@ export default function VideosPage() {
           selectedMedia.id,
           {
             titulo: formData.titulo,
-            archivo: formData.archivo || undefined,
+            archivo: sourceType === 'archivo' ? (formData.archivo || undefined) : undefined,
+            url: sourceType === 'url' ? formData.url : '',
             orden: formData.orden,
             activo: formData.activo,
           },
@@ -162,7 +179,7 @@ export default function VideosPage() {
         );
         alert('Media actualizado exitosamente');
       }
-      
+
       await cargarMedias();
       handleCloseModal();
     } catch (error: unknown) {
@@ -176,7 +193,7 @@ export default function VideosPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('¿Está seguro de eliminar este elemento?')) return;
-    
+
     try {
       await MediaDisplayService.eliminarMediaDisplay(id);
       alert('Media eliminado exitosamente');
@@ -228,11 +245,10 @@ export default function VideosPage() {
       render: (media: Media) => (
         <button
           onClick={() => handleToggleActivo(media)}
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            media.activo
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${media.activo
               ? 'bg-green-100 text-green-800 hover:bg-green-200'
               : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-          }`}
+            }`}
         >
           {media.activo ? 'Activo' : 'Inactivo'}
         </button>
@@ -280,26 +296,26 @@ export default function VideosPage() {
       />
 
       <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              Contenido Multimedia
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Total: {medias.length} elementos | Activos: {medias.filter(m => m.activo).length}
-            </p>
-          </div>
-          <Button
-            icon={Plus}
-            onClick={() => handleOpenModal('crear')}
-          >
-            Agregar Contenido
-          </Button>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">
+            Contenido Multimedia
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Total: {medias.length} elementos | Activos: {medias.filter(m => m.activo).length}
+          </p>
         </div>
+        <Button
+          icon={Plus}
+          onClick={() => handleOpenModal('crear')}
+        >
+          Agregar Contenido
+        </Button>
+      </div>
 
-        <DataTable
-          data={medias}
-          columns={columns}
-        />
+      <DataTable
+        data={medias}
+        columns={columns}
+      />
 
       {/* Modal Crear/Editar */}
       <Modal
@@ -354,28 +370,69 @@ export default function VideosPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Archivo (Video o Imagen) {modalMode === 'crear' && '*'}
-            </label>
-            <input
-              type="file"
-              accept="video/*,image/*"
-              onChange={handleFileChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              required={modalMode === 'crear'}
-            />
-            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs font-semibold text-gray-700 mb-1">✨ Recomendaciones:</p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li>• <strong>Dimensiones ideales:</strong> 1920x1080px (16:9)</li>
-                <li>• <strong>Videos:</strong> MP4 formato H.264, hasta 100MB</li>
-                <li>• <strong>Imágenes:</strong> JPG/PNG/WEBP, hasta 10MB</li>
-                <li>• Las imágenes se mostrarán durante 10 segundos</li>
-                <li>• El contenido se mostrará en pantalla completa (cover)</li>
-              </ul>
-            </div>
+          <div className="flex p-1 bg-gray-100 rounded-lg">
+            <button
+              onClick={() => setSourceType('archivo')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${sourceType === 'archivo'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              Subir Archivo
+            </button>
+            <button
+              onClick={() => setSourceType('url')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${sourceType === 'url'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                }`}
+            >
+              URL de Video
+            </button>
           </div>
+
+          {sourceType === 'archivo' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Archivo (Video o Imagen) {modalMode === 'crear' && '*'}
+              </label>
+              <input
+                type="file"
+                accept="video/*,image/*"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                required={modalMode === 'crear'}
+              />
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs font-semibold text-gray-700 mb-1">✨ Recomendaciones:</p>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li>• <strong>Dimensiones ideales:</strong> 1920x1080px (16:9)</li>
+                  <li>• <strong>Videos:</strong> MP4 formato H.264, hasta 100MB</li>
+                  <li>• <strong>Imágenes:</strong> JPG/PNG/WEBP, hasta 10MB</li>
+                  <li>• Las imágenes se mostrarán durante 10 segundos</li>
+                  <li>• El contenido se mostrará en pantalla completa (cover)</li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                URL del Video *
+              </label>
+              <Input
+                value={formData.url}
+                onChange={(e) => {
+                  setFormData({ ...formData, url: e.target.value });
+                  setPreviewUrl(e.target.value);
+                }}
+                placeholder="https://ejemplo.com/video.mp4"
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Ingrese la URL directa del video (MP4, WebM, etc.) o un enlace de YouTube/Vimeo.
+              </p>
+            </div>
+          )}
 
           {/* Preview */}
           {previewUrl && (
@@ -383,23 +440,51 @@ export default function VideosPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Vista Previa
               </label>
-              <div className="bg-black rounded-lg overflow-hidden" style={{ height: '300px' }}>
-                {formData.archivo?.type.startsWith('image/') || (!formData.archivo && selectedMedia?.tipo === 'imagen') ? (
-                  <img 
-                    src={previewUrl} 
-                    alt="Preview" 
-                    className="w-full h-full object-cover"
-                  />
+              <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center" style={{ height: '300px' }}>
+                {sourceType === 'archivo' ? (
+                  formData.archivo?.type.startsWith('image/') || (!formData.archivo && selectedMedia?.tipo === 'imagen') ? (
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <video
+                      src={previewUrl}
+                      controls
+                      className="w-full h-full object-cover"
+                    />
+                  )
                 ) : (
-                  <video 
-                    src={previewUrl} 
-                    controls 
-                    className="w-full h-full object-cover"
-                  />
+                  // Handle URL preview (simplistic for now)
+                  previewUrl.includes('youtube.com') || previewUrl.includes('youtu.be') ? (
+                    <iframe
+                      width="100%"
+                      height="100%"
+                      src={`https://www.youtube.com/embed/${previewUrl.includes('v=') ? previewUrl.split('v=')[1].split('&')[0] : previewUrl.split('/').pop()}`}
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  ) : (
+                    <video
+                      src={previewUrl}
+                      controls
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback for non-direct video links or error
+                        const target = e.target as HTMLVideoElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  )
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2 text-center">
-                Así se verá en el display (pantalla completa)
+                {sourceType === 'url' && !previewUrl.includes('youtube') && !previewUrl.includes('youtu.be') && !previewUrl.match(/\.(mp4|webm|ogg)$/i)
+                  ? 'Nota: Si el video no carga, es posible que la URL no sea un enlace directo al archivo de video.'
+                  : 'Así se verá en el display'}
               </p>
             </div>
           )}
@@ -431,8 +516,8 @@ export default function VideosPage() {
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               onClick={handleCloseModal}
               disabled={uploading}
             >
@@ -455,7 +540,7 @@ export default function VideosPage() {
                 <span className="text-blue-600 font-semibold">{uploadProgress}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div 
+                <div
                   className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out flex items-center justify-end pr-2"
                   style={{ width: `${uploadProgress}%` }}
                 >
