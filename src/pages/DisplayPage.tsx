@@ -33,6 +33,7 @@ export default function DisplayPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [isMuted] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageTimerRef = useRef<number | null>(null);
 
@@ -127,6 +128,20 @@ export default function DisplayPage() {
     }
   };
 
+  const getYouTubeId = (url: string) => {
+    if (!url) return '';
+    // Handle shorts/
+    if (url.includes('shorts/')) {
+      return url.split('shorts/')[1].split('?')[0];
+    }
+    // Handle v=
+    if (url.includes('v=')) {
+      return url.split('v=')[1].split('&')[0];
+    }
+    // Handle youtu.be/ or other formats
+    return url.split('/').pop()?.split('?')[0] || '';
+  };
+
   const getMediaUrl = (media: Media) => {
     if (media.archivo) {
       const baseUrl = config.API_URL.replace('/api', '');
@@ -208,7 +223,7 @@ export default function DisplayPage() {
                           <iframe
                             key={medias[currentMediaIndex].id}
                             className="absolute inset-0 w-full h-full"
-                            src={`https://www.youtube.com/embed/${medias[currentMediaIndex].url.includes('v=') ? medias[currentMediaIndex].url.split('v=')[1].split('&')[0] : medias[currentMediaIndex].url.split('/').pop()}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=1`}
+                            src={`https://www.youtube.com/embed/${getYouTubeId(medias[currentMediaIndex].url)}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=1&playlist=${getYouTubeId(medias[currentMediaIndex].url)}&rel=0`}
                             title="YouTube video player"
                             frameBorder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -337,6 +352,24 @@ export default function DisplayPage() {
           </div>
         </div>
       </div>
+
+      {/* Overlay de Interacción Inicial - Requerido por navegadores para audio */}
+      {!hasInteracted && (
+        <div
+          className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center justify-center cursor-pointer backdrop-blur-sm"
+          onClick={() => setHasInteracted(true)}
+        >
+          <div className="bg-white p-8 rounded-2xl shadow-2xl text-center transform transition-all hover:scale-105">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Pantalla de Visualización</h2>
+            <p className="text-gray-600">Haz clic en cualquier lugar para activar el audio y el contenido.</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
