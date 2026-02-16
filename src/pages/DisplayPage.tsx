@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import PacienteService from '../lib/services/PacienteService';
