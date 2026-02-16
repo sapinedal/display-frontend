@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import PacienteService from '../lib/services/PacienteService';
@@ -59,7 +59,7 @@ export default function DisplayPage() {
     if (pacientes.length <= 3) return;
 
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => {
+      setCurrentIndex((prev: number) => {
         const nextIndex = prev + 3;
         return nextIndex >= pacientes.length ? 0 : nextIndex;
       });
@@ -69,7 +69,7 @@ export default function DisplayPage() {
   }, [pacientes.length]);
 
   const avanzarMedia = () => {
-    setCurrentMediaIndex((prev) => (prev + 1) % medias.length);
+    setCurrentMediaIndex((prev: number) => (prev + 1) % medias.length);
   };
 
   // Manejo de cambio de media y reproducción
@@ -88,7 +88,7 @@ export default function DisplayPage() {
     if (currentMedia.tipo === 'imagen' || (currentMedia.url && !currentMedia.archivo)) {
       const timer = currentMedia.tipo === 'imagen' ? 10000 : 30000; // 30 seg para videos externos como default
       imageTimerRef.current = window.setTimeout(() => {
-        setCurrentMediaIndex((prev) => (prev + 1) % medias.length);
+        setCurrentMediaIndex((prev: number) => (prev + 1) % medias.length);
       }, timer);
     }
 
@@ -102,6 +102,29 @@ export default function DisplayPage() {
 
   const handleVideoEnd = () => {
     avanzarMedia();
+  };
+
+  const toggleFullscreen = () => {
+    const doc = document as any;
+    if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+      const requestFullScreen = doc.documentElement.requestFullscreen ||
+        doc.documentElement.msRequestFullscreen ||
+        doc.documentElement.mozRequestFullScreen ||
+        doc.documentElement.webkitRequestFullscreen;
+      if (requestFullScreen) {
+        requestFullScreen.call(doc.documentElement).catch((err: any) => {
+          console.error(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+      }
+    } else {
+      const exitFullScreen = doc.exitFullscreen ||
+        doc.msExitFullscreen ||
+        doc.mozCancelFullScreen ||
+        doc.webkitExitFullscreen;
+      if (exitFullScreen) {
+        exitFullScreen.call(doc);
+      }
+    }
   };
 
   const cargarPacientes = async () => {
@@ -120,8 +143,8 @@ export default function DisplayPage() {
       const data = await MediaDisplayService.obtenerMediaDisplays();
       // Filtrar solo medias activos y ordenar
       const mediasActivos = data
-        .filter(m => m.activo)
-        .sort((a, b) => a.orden - b.orden);
+        .filter((m: Media) => m.activo)
+        .sort((a: Media, b: Media) => a.orden - b.orden);
       setMedias(mediasActivos);
     } catch (error) {
       console.error('Error al cargar medias:', error);
@@ -175,21 +198,10 @@ export default function DisplayPage() {
     );
   }
 
+  const currentMedia = medias.length > 0 ? medias[currentMediaIndex] : null;
+
   return (
     <>
-      <style>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-[1600px] mx-auto">
           {/* Logo */}
@@ -208,7 +220,7 @@ export default function DisplayPage() {
             <div>
               <Card className="h-full flex items-center justify-center overflow-hidden p-0">
                 <div className="bg-black rounded-lg w-full relative" style={{ height: '600px' }}>
-                  {medias.length === 0 ? (
+                  {!currentMedia ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="text-center">
                         <div className="text-8xl mb-6">🎬</div>
@@ -218,12 +230,12 @@ export default function DisplayPage() {
                     </div>
                   ) : (
                     <>
-                      {medias[currentMediaIndex].tipo === 'video' ? (
-                        medias[currentMediaIndex].url && (medias[currentMediaIndex].url.includes('youtube.com') || medias[currentMediaIndex].url.includes('youtu.be')) ? (
+                      {currentMedia.tipo === 'video' ? (
+                        currentMedia.url && (currentMedia.url.includes('youtube.com') || currentMedia.url.includes('youtu.be')) ? (
                           <iframe
-                            key={medias[currentMediaIndex].id}
+                            key={currentMedia.id}
                             className="absolute inset-0 w-full h-full"
-                            src={`https://www.youtube.com/embed/${getYouTubeId(medias[currentMediaIndex].url)}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=1&playlist=${getYouTubeId(medias[currentMediaIndex].url)}&rel=0`}
+                            src={`https://www.youtube.com/embed/${getYouTubeId(currentMedia.url || '')}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=1&playlist=${getYouTubeId(currentMedia.url || '')}&rel=0`}
                             title="YouTube video player"
                             frameBorder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -232,22 +244,22 @@ export default function DisplayPage() {
                         ) : (
                           <video
                             ref={videoRef}
-                            key={medias[currentMediaIndex].id}
+                            key={currentMedia.id}
                             className="absolute inset-0 w-full h-full"
                             style={{ objectFit: 'cover' }}
                             autoPlay
                             muted={isMuted}
                             onEnded={handleVideoEnd}
-                            src={getMediaUrl(medias[currentMediaIndex])}
+                            src={getMediaUrl(currentMedia)}
                           >
                             Tu navegador no soporta la reproducción de video.
                           </video>
                         )
                       ) : (
                         <img
-                          key={medias[currentMediaIndex].id}
-                          src={getMediaUrl(medias[currentMediaIndex])}
-                          alt={medias[currentMediaIndex].titulo}
+                          key={currentMedia.id}
+                          src={getMediaUrl(currentMedia)}
+                          alt={currentMedia.titulo}
                           className="absolute inset-0 w-full h-full"
                           style={{ objectFit: 'cover', animation: 'fadeIn 0.5s ease-in' }}
                         />
@@ -255,13 +267,13 @@ export default function DisplayPage() {
 
                       {/* Indicador de título */}
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent text-white px-6 py-4">
-                        <p className="text-lg font-semibold">{medias[currentMediaIndex].titulo}</p>
+                        <p className="text-lg font-semibold">{currentMedia.titulo}</p>
                       </div>
 
                       {/* Indicadores de posición */}
                       {medias.length > 1 && (
                         <div className="absolute top-4 right-4 flex space-x-1.5">
-                          {medias.map((_, idx) => (
+                          {medias.map((_, idx: number) => (
                             <div
                               key={idx}
                               className={`h-1.5 rounded-full transition-all ${currentMediaIndex === idx ? 'bg-blue-500 w-8' : 'bg-white bg-opacity-50 w-6'
@@ -308,7 +320,7 @@ export default function DisplayPage() {
                     </div>
                   ) : (
                     <>
-                      {pacientesAMostrar.map((paciente, idx) => {
+                      {pacientesAMostrar.map((paciente: Paciente, idx: number) => {
                         const estadoConfig = getEstadoConfig(paciente.estadoPaciente);
 
                         return (
@@ -334,7 +346,7 @@ export default function DisplayPage() {
                             Paciente {currentIndex + 1} - {Math.min(currentIndex + 3, pacientes.length)} de {pacientes.length}
                           </span>
                           <div className="flex space-x-1 ml-4">
-                            {Array.from({ length: Math.ceil(pacientes.length / 3) }).map((_, idx) => (
+                            {Array.from({ length: Math.ceil(pacientes.length / 3) }).map((_, idx: number) => (
                               <div
                                 key={idx}
                                 className={`w-2 h-2 rounded-full transition-all ${Math.floor(currentIndex / 3) === idx ? 'bg-blue-600 w-8' : 'bg-gray-300'
@@ -357,7 +369,10 @@ export default function DisplayPage() {
       {!hasInteracted && (
         <div
           className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center justify-center cursor-pointer backdrop-blur-sm"
-          onClick={() => setHasInteracted(true)}
+          onClick={() => {
+            setHasInteracted(true);
+            toggleFullscreen();
+          }}
         >
           <div className="bg-white p-8 rounded-2xl shadow-2xl text-center transform transition-all hover:scale-105">
             <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -370,6 +385,17 @@ export default function DisplayPage() {
           </div>
         </div>
       )}
+
+      {/* Botón flotante discreto para fullscreen */}
+      <button
+        onClick={toggleFullscreen}
+        className="fixed bottom-2 right-2 opacity-0 hover:opacity-50 transition-opacity z-50 bg-black text-white p-2 rounded-full"
+        title="Toggle Fullscreen"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+        </svg>
+      </button>
     </>
   );
 }
