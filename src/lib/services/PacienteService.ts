@@ -72,9 +72,9 @@ class PacienteService {
 
   static async buscarAfiliado(documento: string): Promise<any> {
     if (!documento) throw new Error("El número de documento es requerido");
-    
+
     try {
-      const response = await api.get(`/afiliados/${documento}`);
+      const response = await api.get(`/cadena-custodia/afiliados/${documento}`);
       return response.data;
     } catch (error) {
       console.error("Error al buscar el afiliado:", error);
