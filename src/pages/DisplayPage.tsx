@@ -51,7 +51,7 @@ export default function DisplayPage() {
     const interval = setInterval(() => {
       cargarPacientes();
       cargarMedias();
-    }, 30000); // Actualizar cada 30 segundos
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -72,24 +72,53 @@ export default function DisplayPage() {
     setCurrentMediaIndex((prev: number) => (prev + 1) % medias.length);
   };
 
-  // Manejo de cambio de media y reproducción
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('youtube.com')) return;
+
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+
+        const isEnded =
+          (data.event === 'infoDelivery' && data.info?.playerState === 0) ||
+          (data.event === 'onStateChange' && data.info === 0);
+
+        if (isEnded && medias.length > 1) {
+          avanzarMedia();
+        }
+      } catch (e) {
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [medias.length]);
+
   useEffect(() => {
     if (medias.length === 0) return;
 
     const currentMedia = medias[currentMediaIndex];
 
-    // Limpiar timer anterior si existe
+    const isYouTube =
+      currentMedia.url &&
+      (currentMedia.url.includes('youtube.com') ||
+        currentMedia.url.includes('youtu.be'));
+
+    const onlyOneMedia = medias.length === 1;
+
     if (imageTimerRef.current) {
       clearTimeout(imageTimerRef.current);
       imageTimerRef.current = null;
     }
 
-    // Si es imagen o es un video externo (YouTube/URL), programar cambio automático
-    if (currentMedia.tipo === 'imagen' || (currentMedia.url && !currentMedia.archivo)) {
-      const timer = currentMedia.tipo === 'imagen' ? 10000 : 30000; // 30 seg para videos externos como default
+    if (onlyOneMedia && isYouTube) {
+      return;
+    }
+
+    if (currentMedia.tipo === 'imagen') {
       imageTimerRef.current = window.setTimeout(() => {
-        setCurrentMediaIndex((prev: number) => (prev + 1) % medias.length);
-      }, timer);
+        avanzarMedia();
+      }, 10000);
     }
 
     return () => {
@@ -97,12 +126,9 @@ export default function DisplayPage() {
         clearTimeout(imageTimerRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMediaIndex, medias.length]);
+  }, [currentMediaIndex, medias]);
 
-  const handleVideoEnd = () => {
-    avanzarMedia();
-  };
+
 
   const toggleFullscreen = () => {
     const doc = document as any;
@@ -141,7 +167,6 @@ export default function DisplayPage() {
   const cargarMedias = async () => {
     try {
       const data = await MediaDisplayService.obtenerMediaDisplays();
-      // Filtrar solo medias activos y ordenar
       const mediasActivos = data
         .filter((m: Media) => m.activo)
         .sort((a: Media, b: Media) => a.orden - b.orden);
@@ -153,15 +178,12 @@ export default function DisplayPage() {
 
   const getYouTubeId = (url: string) => {
     if (!url) return '';
-    // Handle shorts/
     if (url.includes('shorts/')) {
       return url.split('shorts/')[1].split('?')[0];
     }
-    // Handle v=
     if (url.includes('v=')) {
       return url.split('v=')[1].split('&')[0];
     }
-    // Handle youtu.be/ or other formats
     return url.split('/').pop()?.split('?')[0] || '';
   };
 
@@ -233,9 +255,8 @@ export default function DisplayPage() {
                       {currentMedia.tipo === 'video' ? (
                         currentMedia.url && (currentMedia.url.includes('youtube.com') || currentMedia.url.includes('youtu.be')) ? (
                           <iframe
-                            key={currentMedia.id}
                             className="absolute inset-0 w-full h-full"
-                            src={`https://www.youtube.com/embed/${getYouTubeId(currentMedia.url || '')}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=1&playlist=${getYouTubeId(currentMedia.url || '')}&rel=0`}
+                            src={`https://www.youtube.com/embed/${getYouTubeId(currentMedia.url || '')}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=${medias.length === 1 ? '1' : '0'}&playlist=${medias.length === 1 ? getYouTubeId(currentMedia.url || '') : ''}&rel=0&enablejsapi=1`}
                             title="YouTube video player"
                             frameBorder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -244,13 +265,15 @@ export default function DisplayPage() {
                         ) : (
                           <video
                             ref={videoRef}
-                            key={currentMedia.id}
                             className="absolute inset-0 w-full h-full"
                             style={{ objectFit: 'cover' }}
                             autoPlay
-                            loop
                             muted={isMuted}
-                            onEnded={handleVideoEnd}
+                            onEnded={() => {
+                              if (medias.length > 1) {
+                                avanzarMedia();
+                              }
+                            }}
                             src={getMediaUrl(currentMedia)}
                           >
                             Tu navegador no soporta la reproducción de video.
