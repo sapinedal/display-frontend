@@ -248,6 +248,7 @@ export default function DisplayPage() {
                             className="absolute inset-0 w-full h-full"
                             style={{ objectFit: 'cover' }}
                             autoPlay
+                            loop
                             muted={isMuted}
                             onEnded={handleVideoEnd}
                             src={getMediaUrl(currentMedia)}
