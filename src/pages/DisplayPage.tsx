@@ -36,6 +36,9 @@ export default function DisplayPage() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageTimerRef = useRef<number | null>(null);
+  // Stable key for YouTube iframe: only rebuilds when the actual video ID list changes
+  const mediasRef = useRef<Media[]>(medias);
+  mediasRef.current = medias;
 
   const estadosConfig: Record<string, { label: string; color: string; bg: string }> = {
     preparacion: { label: 'Preparación', color: 'text-blue-800', bg: 'bg-blue-100' },
@@ -69,7 +72,7 @@ export default function DisplayPage() {
   }, [pacientes.length]);
 
   const avanzarMedia = () => {
-    setCurrentMediaIndex((prev: number) => (prev + 1) % medias.length);
+    setCurrentMediaIndex((prev: number) => (prev + 1) % mediasRef.current.length);
   };
 
   useEffect(() => {
@@ -79,11 +82,21 @@ export default function DisplayPage() {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
 
+        // Track which video is playing to keep dot indicator in sync
+        if (data.event === 'infoDelivery' && data.info?.videoData?.video_id) {
+          const playingId = data.info.videoData.video_id;
+          const idx = mediasRef.current.findIndex(
+            (m) => m.url && getYouTubeId(m.url) === playingId
+          );
+          if (idx !== -1) setCurrentMediaIndex(idx);
+        }
+
+        // Fallback for non-YouTube-playlist mode (local files / single videos)
         const isEnded =
           (data.event === 'infoDelivery' && data.info?.playerState === 0) ||
           (data.event === 'onStateChange' && data.info === 0);
 
-        if (isEnded && medias.length > 1) {
+        if (isEnded) {
           avanzarMedia();
         }
       } catch (e) {
@@ -92,33 +105,32 @@ export default function DisplayPage() {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [medias.length]);
+  }, []);
 
   useEffect(() => {
     if (medias.length === 0) return;
 
     const currentMedia = medias[currentMediaIndex];
 
-    const isYouTube =
-      currentMedia.url &&
-      (currentMedia.url.includes('youtube.com') ||
-        currentMedia.url.includes('youtu.be'));
-
-    const onlyOneMedia = medias.length === 1;
-
     if (imageTimerRef.current) {
       clearTimeout(imageTimerRef.current);
       imageTimerRef.current = null;
-    }
-
-    if (onlyOneMedia && isYouTube) {
-      return;
     }
 
     if (currentMedia.tipo === 'imagen') {
       imageTimerRef.current = window.setTimeout(() => {
         avanzarMedia();
       }, 10000);
+    }
+
+    // For local video files: imperatively change src so the <video> element is never unmounted
+    if (currentMedia.tipo === 'video' && currentMedia.archivo && videoRef.current) {
+      const newSrc = getMediaUrl(currentMedia);
+      if (videoRef.current.src !== newSrc) {
+        videoRef.current.src = newSrc;
+        videoRef.current.load();
+        videoRef.current.play().catch(() => {});
+      }
     }
 
     return () => {
@@ -171,6 +183,10 @@ export default function DisplayPage() {
         .filter((m: Media) => m.activo)
         .sort((a: Media, b: Media) => a.orden - b.orden);
       setMedias(mediasActivos);
+      // Prevent currentMediaIndex from going out of bounds when the list shrinks
+      setCurrentMediaIndex((prev) =>
+        mediasActivos.length > 0 && prev >= mediasActivos.length ? 0 : prev
+      );
     } catch (error) {
       console.error('Error al cargar medias:', error);
     }
@@ -222,6 +238,22 @@ export default function DisplayPage() {
 
   const currentMedia = medias.length > 0 ? medias[currentMediaIndex] : null;
 
+  // Build YouTube playlist from all active YouTube media, in order
+  const youtubeMedias = medias.filter(
+    (m) => m.tipo === 'video' && m.url &&
+    (m.url.includes('youtube.com') || m.url.includes('youtu.be'))
+  );
+  const youtubeIds = youtubeMedias.map((m) => getYouTubeId(m.url || ''));
+  // Stable key: only changes when the actual set of YouTube IDs changes
+  const youtubeIframeKey = youtubeIds.join(',');
+  // First video to embed; playlist parameter contains all IDs for seamless auto-advance
+  const firstYouTubeId = youtubeIds[0] || '';
+  const youtubePlaylistParam = youtubeIds.join(',');
+  const youtubeIsCurrentMedia =
+    currentMedia?.tipo === 'video' &&
+    currentMedia?.url &&
+    (currentMedia.url.includes('youtube.com') || currentMedia.url.includes('youtu.be'));
+
   return (
     <>
       <div className="min-h-screen bg-gray-50 p-8">
@@ -253,27 +285,27 @@ export default function DisplayPage() {
                   ) : (
                     <>
                       {currentMedia.tipo === 'video' ? (
-                        currentMedia.url && (currentMedia.url.includes('youtube.com') || currentMedia.url.includes('youtu.be')) ? (
+                        youtubeIsCurrentMedia ? (
+                          // Single stable iframe using YouTube's playlist for seamless auto-advance.
+                          // key only changes when the set of video IDs changes — NOT on every index change.
                           <iframe
+                            key={youtubeIframeKey}
                             className="absolute inset-0 w-full h-full"
-                            src={`https://www.youtube.com/embed/${getYouTubeId(currentMedia.url || '')}?autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&loop=${medias.length === 1 ? '1' : '0'}&playlist=${medias.length === 1 ? getYouTubeId(currentMedia.url || '') : ''}&rel=0&enablejsapi=1`}
+                            src={`https://www.youtube.com/embed/${firstYouTubeId}?playlist=${youtubePlaylistParam}&loop=1&autoplay=1&mute=${isMuted ? '1' : '0'}&controls=0&rel=0&enablejsapi=1`}
                             title="YouTube video player"
                             frameBorder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
                           ></iframe>
                         ) : (
+                          // Local video: never unmounted, src changed imperatively via useEffect
                           <video
                             ref={videoRef}
                             className="absolute inset-0 w-full h-full"
                             style={{ objectFit: 'cover' }}
                             autoPlay
                             muted={isMuted}
-                            onEnded={() => {
-                              if (medias.length > 1) {
-                                avanzarMedia();
-                              }
-                            }}
+                            onEnded={avanzarMedia}
                             src={getMediaUrl(currentMedia)}
                           >
                             Tu navegador no soporta la reproducción de video.
