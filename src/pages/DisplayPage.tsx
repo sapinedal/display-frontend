@@ -4,6 +4,7 @@ import Spinner from '../components/ui/Spinner';
 import PacienteService from '../lib/services/PacienteService';
 import MediaDisplayService from '../lib/services/MediaDisplayService';
 import { config } from '../config/env';
+import echo from '../lib/echo';
 
 interface Paciente {
   id: number;
@@ -48,14 +49,49 @@ export default function DisplayPage() {
     alta: { label: 'Alta', color: 'text-green-800', bg: 'bg-green-100' },
   };
 
+  // Carga inicial
   useEffect(() => {
     cargarPacientes();
     cargarMedias();
-    const interval = setInterval(() => {
-      cargarPacientes();
-      cargarMedias();
-    }, 30000);
-    return () => clearInterval(interval);
+  }, []);
+
+  // WebSocket: reemplaza el polling de 30s
+  useEffect(() => {
+    const pacientesChannel = echo
+      .channel('pacientes')
+      .listen('.pacientes.updated', (e: { pacientes?: Paciente[] }) => {
+        console.log('Evento recibido:', e);
+        if (Array.isArray(e?.pacientes)) {
+          setPacientes(e.pacientes);
+          setLoading(false);
+        } else {
+          // El evento no trae el payload completo: refetch puntual
+          cargarPacientes();
+        }
+      });
+
+    const mediaChannel = echo
+      .channel('media-display')
+      .listen('.media-display.updated', (e: { medias?: Media[] }) => {
+        if (Array.isArray(e?.medias)) {
+          const activos = e.medias
+            .filter((m) => m.activo)
+            .sort((a, b) => a.orden - b.orden);
+          setMedias(activos);
+          setCurrentMediaIndex((prev) =>
+            activos.length > 0 && prev >= activos.length ? 0 : prev
+          );
+        } else {
+          cargarMedias();
+        }
+      });
+
+    return () => {
+      pacientesChannel.stopListening('.pacientes.updated');
+      mediaChannel.stopListening('.media-display.updated');
+      echo.leave('pacientes');
+      echo.leave('media-display');
+    };
   }, []);
 
   useEffect(() => {
