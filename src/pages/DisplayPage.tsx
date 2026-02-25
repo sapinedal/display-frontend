@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import PacienteService from '../lib/services/PacienteService';
 import MediaDisplayService from '../lib/services/MediaDisplayService';
 import { config } from '../config/env';
+import echo from '../lib/echo';
 
 interface Paciente {
   id: number;
@@ -48,15 +49,108 @@ export default function DisplayPage() {
     alta: { label: 'Alta', color: 'text-green-800', bg: 'bg-green-100' },
   };
 
+  // Declaro las funciones de carga primero con useCallback
+  const cargarPacientes = useCallback(async () => {
+    try {
+      const data = await PacienteService.obtenerPacientes();
+      setPacientes(data);
+    } catch (error) {
+      console.error('Error al cargar pacientes:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const cargarMedias = useCallback(async () => {
+    try {
+      const data = await MediaDisplayService.obtenerMediaDisplays();
+      const mediasActivos = data
+        .filter((m: Media) => m.activo)
+        .sort((a: Media, b: Media) => a.orden - b.orden);
+      setMedias(mediasActivos);
+      // Prevent currentMediaIndex from going out of bounds when the list shrinks
+      setCurrentMediaIndex((prev) =>
+        mediasActivos.length > 0 && prev >= mediasActivos.length ? 0 : prev
+      );
+    } catch (error) {
+      console.error('Error al cargar medias:', error);
+    }
+  }, []);
+
   useEffect(() => {
     cargarPacientes();
     cargarMedias();
-    const interval = setInterval(() => {
+  }, [cargarPacientes, cargarMedias]);
+
+  useEffect(() => {
+    let isInitialConnect = true;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const refetchAll = () => {
       cargarPacientes();
       cargarMedias();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    };
+
+    const pacientesChannel = echo
+      .channel('pacientes')
+      .listen('.pacientes.updated', (e: { pacientes?: Paciente[] }) => {
+        if (Array.isArray(e?.pacientes)) {
+          setPacientes(e.pacientes);
+          setLoading(false);
+        } else {
+          cargarPacientes();
+        }
+      });
+
+    const mediaChannel = echo
+      .channel('media-display')
+      .listen('.media-display.updated', (e: { media?: Media[] }) => {
+        if (Array.isArray(e?.media)) {
+          const activos = e.media
+            .filter((m) => m.activo)
+            .sort((a, b) => a.orden - b.orden);
+          setMedias(activos);
+          setCurrentMediaIndex((prev) =>
+            activos.length > 0 && prev >= activos.length ? 0 : prev
+          );
+        } else {
+          cargarMedias();
+        }
+      });
+
+    const pusherConnection = echo.connector.pusher.connection;
+
+    const onDisconnected = () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        refetchAll();
+      }, 2000);
+    };
+
+    const onConnected = () => {
+      if (isInitialConnect) {
+        isInitialConnect = false;
+        return;
+      }
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        refetchAll();
+      }, 1000);
+    };
+
+    pusherConnection.bind('disconnected', onDisconnected);
+    pusherConnection.bind('connected', onConnected);
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      pacientesChannel.stopListening('.pacientes.updated');
+      mediaChannel.stopListening('.media-display.updated');
+      pusherConnection.unbind('disconnected', onDisconnected);
+      pusherConnection.unbind('connected', onConnected);
+      echo.leave('pacientes');
+      echo.leave('media-display');
+    };
+  }, [cargarPacientes, cargarMedias]);
 
   useEffect(() => {
     if (pacientes.length <= 3) return;
@@ -162,33 +256,6 @@ export default function DisplayPage() {
       if (exitFullScreen) {
         exitFullScreen.call(doc);
       }
-    }
-  };
-
-  const cargarPacientes = async () => {
-    try {
-      const data = await PacienteService.obtenerPacientes();
-      setPacientes(data);
-    } catch (error) {
-      console.error('Error al cargar pacientes:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const cargarMedias = async () => {
-    try {
-      const data = await MediaDisplayService.obtenerMediaDisplays();
-      const mediasActivos = data
-        .filter((m: Media) => m.activo)
-        .sort((a: Media, b: Media) => a.orden - b.orden);
-      setMedias(mediasActivos);
-      // Prevent currentMediaIndex from going out of bounds when the list shrinks
-      setCurrentMediaIndex((prev) =>
-        mediasActivos.length > 0 && prev >= mediasActivos.length ? 0 : prev
-      );
-    } catch (error) {
-      console.error('Error al cargar medias:', error);
     }
   };
 
