@@ -15,6 +15,7 @@ interface Media {
   tipo: 'video' | 'imagen';
   url: string | null;
   archivo: string | null;
+  archivo_url?: string | null;
   displayUrl?: string;
   activo: boolean;
   orden: number;
@@ -59,9 +60,9 @@ export default function VideosPage() {
       const data = await MediaDisplayService.obtenerMediaDisplays();
       const mediasFormateadas = data.map(media => ({
         ...media,
-        displayUrl: media.archivo
-          ? `${config.API_URL}/storage/${media.archivo}`
-          : (media.url || ''),
+        displayUrl: media.archivo_url 
+          ? media.archivo_url 
+          : (media.archivo ? `${config.API_URL}/storage/${media.archivo}` : (media.url || '')),
       }));
       setMedias(mediasFormateadas);
     } catch (error) {

@@ -14,6 +14,7 @@ export interface MediaDisplay {
   titulo: string;
   tipo: 'video' | 'imagen';
   archivo: string | null;
+  archivo_url?: string | null;
   url: string | null;
   orden: number;
   activo: boolean;

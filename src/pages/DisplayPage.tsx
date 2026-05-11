@@ -21,6 +21,7 @@ interface Media {
   titulo: string;
   tipo: 'video' | 'imagen';
   archivo: string | null;
+  archivo_url?: string | null;
   url: string | null;
   orden: number;
   activo: boolean;
@@ -204,6 +205,7 @@ export default function DisplayPage() {
   };
 
   const getMediaUrl = (media: Media) => {
+    if (media.archivo_url) return media.archivo_url;
     if (media.archivo) {
       const baseUrl = config.API_URL.replace('/api', '');
       return `${baseUrl}/storage/${media.archivo}`;
